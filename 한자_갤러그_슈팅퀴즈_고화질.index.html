@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>漢字 갤러그 - 정답을 쏴라!</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:#05071a;color:#e8f1ff;font-family:"Noto Sans CJK KR","Malgun Gothic","Apple SD Gothic Neo","Nanum Gothic",sans-serif;overflow:hidden}
+body{display:flex;align-items:center;justify-content:center}
+#wrap{position:relative;width:min(100vw,66.6667vh);aspect-ratio:2/3;max-height:100vh;touch-action:none;user-select:none}
+canvas{width:100%;height:100%;display:block;background:#05071a;border-radius:6px;image-rendering:auto}
+.overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:14px;background:rgba(5,7,26,.93);overflow-y:auto;border-radius:6px}
+.hidden{display:none!important}
+h1{margin:0 0 2px;font-size:30px;letter-spacing:1px;color:#ffd166;text-align:center}
+.sub{margin:0 0 12px;font-size:13px;color:#9fb0d8;text-align:center;line-height:1.5}
+.card{width:100%;max-width:400px;background:#10183f;border:1px solid #2b3a7a;border-radius:12px;padding:10px 12px;margin-bottom:8px}
+.card h3{margin:0 0 6px;font-size:13px;color:#7fd6ff}
+label.opt{display:block;padding:4px 2px;font-size:14px;cursor:pointer}
+label.opt small{color:#8d9bc8}
+select,textarea{width:100%;background:#0a1030;color:#e8f1ff;border:1px solid #2b3a7a;border-radius:8px;padding:6px;font-size:13px;font-family:inherit}
+textarea{height:96px;resize:vertical}
+.row{display:flex;gap:14px;flex-wrap:wrap;font-size:13px}
+button.big{background:linear-gradient(#ffd166,#f4a300);color:#2a1a00;border:0;border-radius:12px;padding:12px 28px;font-size:18px;font-weight:800;cursor:pointer;margin:4px}
+button.sec{background:#1a2760;color:#e8f1ff;border:1px solid #3a4c9a;border-radius:12px;padding:12px 20px;font-size:15px;font-weight:700;cursor:pointer;margin:4px}
+.help{font-size:12px;color:#8d9bc8;text-align:center;line-height:1.6;max-width:400px}
+.err{color:#ff8fa3;font-size:13px;min-height:18px;text-align:center}
+#pauseBtn{position:absolute;top:3px;right:4px;width:26px;height:22px;border:0;border-radius:6px;background:rgba(255,255,255,.12);color:#fff;font-size:12px;cursor:pointer;z-index:2}
+.stat{font-size:16px;margin:2px 0;text-align:center}
+.stat b{color:#ffd166;font-size:22px}
+#wrongList{width:100%;max-width:400px;max-height:200px;overflow-y:auto;background:#10183f;border:1px solid #2b3a7a;border-radius:10px;padding:6px 10px;margin:8px 0;font-size:14px}
+#wrongList div{padding:3px 0;border-bottom:1px dashed #2b3a7a}
+#wrongList div:last-child{border:0}
+#wrongList span{color:#7CFFB2;font-weight:700}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="c" width="480" height="720"></canvas>
+  <button id="pauseBtn" class="hidden" title="일시정지 (P)">⏸</button>
+
+  <div id="menu" class="overlay">
+    <h1>漢字 갤러그</h1>
+    <p class="sub">정답을 쏘세요! <b style="color:#ff8fa3">오답을 쏘면 에너지가 줄어요.</b><br>에너지가 0이 되면 게임 종료</p>
+
+    <div class="card">
+      <h3>① 문제 유형</h3>
+      <label class="opt"><input type="radio" name="mode" value="hanja" checked> 한자 → 훈음 <small>(山 → 메 산)</small></label>
+      <label class="opt"><input type="radio" name="mode" value="read"> 한자어 → 독음 <small>(學校 → 학교)</small></label>
+      <label class="opt"><input type="radio" name="mode" value="mean"> 한자어 → 뜻 <small>(山川 → 산과 내)</small></label>
+      <label class="opt"><input type="radio" name="mode" value="mix"> 전체 섞기</label>
+      <label class="opt"><input type="radio" name="mode" value="custom"> 직접 입력한 문제 사용</label>
+      <div id="customBox" class="hidden" style="margin-top:6px">
+        <textarea id="customText" spellcheck="false">山|메 산|물 수|불 화|나무 목
+學校|학교|학생|학년|학급
+信義|믿음과 의리|가르치는 방|책을 읽음|때의 사이</textarea>
+        <div class="help" style="margin-top:4px;text-align:left">한 줄에 한 문제: <b>문제 | 정답 | 오답1 | 오답2 | 오답3</b><br>오답을 비워 두면 다른 문제의 정답에서 자동으로 채웁니다. (구분: | 또는 쉼표 또는 탭)</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>② 설정</h3>
+      <div class="row" style="margin-bottom:6px">
+        <label>속도&nbsp;
+          <select id="diff" style="width:auto"><option value="0.7">느림</option><option value="1" selected>보통</option><option value="1.4">빠름</option></select>
+        </label>
+      </div>
+      <label class="opt"><input type="checkbox" id="optSfx" checked> 효과음 켜기</label>
+      <label class="opt"><input type="checkbox" id="optEnemyFire"> 적 탄환(방해) 켜기 <small>(맞으면 에너지 −10)</small></label>
+    </div>
+
+    <div id="menuErr" class="err"></div>
+    <button class="big" id="startBtn">▶ 게임 시작</button>
+    <div class="help">이동: ← → (A / D) 또는 마우스·손가락 드래그<br>발사: 스페이스바(누르고 있으면 연사) / 마우스 클릭<br>스마트폰: 드래그로 이동 → <b>화면을 더블탭</b>하면 발사 (두 번째 탭을 누르고 있으면 연사)<br>일시정지: P 또는 Esc · 소리: M</div>
+  </div>
+
+  <div id="over" class="overlay hidden">
+    <h1 style="color:#ff8fa3">GAME OVER</h1>
+    <div class="stat">점수 <b id="oScore">0</b></div>
+    <div class="stat">맞힌 문제 <b id="oSolved">0</b> · 도달 단계 <b id="oLevel">1</b></div>
+    <div class="stat" style="font-size:13px;color:#9fb0d8">최고 기록 <span id="oBest">0</span></div>
+    <div class="sub" style="margin-top:8px">틀리거나 놓친 문제 (복습)</div>
+    <div id="wrongList"></div>
+    <div>
+      <button class="big" id="againBtn">↻ 다시 하기</button>
+      <button class="sec" id="menuBtn">메뉴로</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+'use strict';
+const $=id=>document.getElementById(id);
+const W=480,H=720,DEAD=H-118,PANEL_BOTTOM=104;
+const cv=$('c'),ctx=cv.getContext('2d',{alpha:false});
+// 논리 좌표는 480×720으로 유지하고 실제 픽셀만 기기 해상도에 맞게 확장
+function resizeCanvas(){
+  const dpr=Math.min(3,Math.max(1,window.devicePixelRatio||1));
+  const rect=cv.getBoundingClientRect();
+  const scale=Math.max(1,Math.min(2,Math.max(rect.width/W,rect.height/H)*dpr)); // 2배 상한: 폰 발열·끊김 방지
+  const pw=Math.round(W*scale),ph=Math.round(H*scale);
+  if(cv.width!==pw||cv.height!==ph){cv.width=pw;cv.height=ph;}
+  ctx.setTransform(pw/W,0,0,ph/H,0,0);
+  ctx.imageSmoothingEnabled=true;
+  ctx.imageSmoothingQuality='high';
+}
+window.addEventListener('resize',resizeCanvas);
+resizeCanvas();
+const FONT='"Noto Serif CJK KR","Noto Sans CJK KR","Malgun Gothic","Apple SD Gothic Neo","Nanum Gothic","Noto Sans KR",sans-serif';
+const COLS=['#ff6b6b','#ffd166','#06d6a0','#4cc9f0'];
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;};
+
+/* ---------- 문제 데이터 ---------- */
+const HANJA=[['日','날 일'],['月','달 월'],['火','불 화'],['水','물 수'],['木','나무 목'],['金','쇠 금'],['土','흙 토'],['山','메 산'],['川','내 천'],['江','강 강'],['天','하늘 천'],['地','땅 지'],['人','사람 인'],['大','큰 대'],['小','작을 소'],['中','가운데 중'],['上','윗 상'],['下','아래 하'],['左','왼 좌'],['右','오른 우'],['東','동녘 동'],['西','서녘 서'],['南','남녘 남'],['北','북녘 북'],['父','아비 부'],['母','어미 모'],['兄','형 형'],['弟','아우 제'],['學','배울 학'],['校','학교 교'],['先','먼저 선'],['生','날 생'],['心','마음 심'],['口','입 구'],['目','눈 목'],['手','손 수'],['足','발 족'],['力','힘 력'],['王','임금 왕'],['門','문 문'],['國','나라 국'],['民','백성 민'],['花','꽃 화'],['草','풀 초'],['友','벗 우'],['信','믿을 신'],['愛','사랑 애'],['時','때 시'],['間','사이 간'],['春','봄 춘'],['夏','여름 하'],['秋','가을 추'],['冬','겨울 동']];
+const WORDS=[['學校','학교','배우는 곳'],['先生','선생','먼저 난 사람'],['父母','부모','아버지와 어머니'],['家族','가족','한집안 식구'],['人生','인생','사람의 삶'],['自然','자연','스스로 그러함'],['山川','산천','산과 내'],['國民','국민','나라의 백성'],['敎室','교실','가르치는 방'],['時間','시간','때의 사이'],['道德','도덕','도리와 덕'],['學習','학습','배우고 익힘'],['友情','우정','벗 사이의 정'],['信義','신의','믿음과 의리'],['花草','화초','꽃과 풀'],['江山','강산','강과 산'],['東西','동서','동쪽과 서쪽'],['南北','남북','남쪽과 북쪽'],['天地','천지','하늘과 땅'],['父子','부자','아버지와 아들'],['兄弟','형제','형과 아우'],['讀書','독서','책을 읽음'],['運動','운동','몸을 움직임'],['音樂','음악','소리의 즐거움'],['自由','자유','스스로 말미암음'],['平和','평화','평온하고 화목함'],['安全','안전','편안하고 온전함'],['生活','생활','살아서 활동함'],['文學','문학','글을 다루는 예술'],['春秋','춘추','봄과 가을']];
+
+let ITEMS=[],deck=[];
+
+function buildItems(mode){
+  if(mode==='hanja')return HANJA.map(([q,a])=>({q,a,p:'훈(뜻)과 음(소리)은?',pool:'h'}));
+  if(mode==='read')return WORDS.map(([q,r])=>({q,a:r,p:'음(소리)은?',pool:'r'}));
+  if(mode==='mean')return WORDS.map(([q,r,m])=>({q,a:m,p:'뜻은?',pool:'m'}));
+  if(mode==='mix')return [].concat(buildItems('hanja'),buildItems('read'),buildItems('mean'));
+  return parseCustom($('customText').value);
+}
+function parseCustom(text){
+  const out=[];
+  String(text||'').split(/\r?\n/).forEach(line=>{
+    const t=line.split(/[|\t,]/).map(s=>s.trim());
+    if(t.length>=2&&t[0]&&t[1])out.push({q:t[0],a:t[1],p:'정답을 쏘세요!',pool:'c',w:t.slice(2).filter(Boolean)});
+  });
+  return out;
+}
+function wrongsFor(it){
+  let wr=shuffle([...new Set((it.w||[]).filter(x=>x&&x!==it.a))]).slice(0,3);
+  if(wr.length<3){
+    const used=new Set([it.a].concat(wr));
+    const cand=shuffle([...new Set(ITEMS.filter(o=>o.pool===it.pool).map(o=>o.a))].filter(x=>!used.has(x)));
+    while(wr.length<3&&cand.length)wr.push(cand.pop());
+  }
+  return wr.length<3?null:wr;
+}
+
+/* ---------- 입력 ---------- */
+const keys={};
+const ptr={x:W/2,active:false,down:false};
+window.addEventListener('keydown',e=>{
+  if(['ArrowLeft','ArrowRight','Space','ArrowUp','ArrowDown'].includes(e.code)&&S&&inGame())e.preventDefault();
+  keys[e.code]=true;
+  if(e.code==='KeyP'||e.code==='Escape')togglePause();
+  if(e.code==='KeyM'){$('optSfx').checked=!$('optSfx').checked;}
+});
+window.addEventListener('keyup',e=>{keys[e.code]=false;});
+window.addEventListener('blur',()=>{for(const k in keys)keys[k]=false;ptr.down=false;if(S&&inGame()&&!S.paused)togglePause();});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&S&&inGame()&&!S.paused)togglePause();});
+function px(e){const r=cv.getBoundingClientRect();return(e.clientX-r.left)/r.width*W;}
+let lastTap=0,lastTapX=0;
+cv.addEventListener('pointerdown',e=>{
+  ptr.x=px(e);ptr.active=true;try{cv.setPointerCapture(e.pointerId);}catch(_){}ensureAudio();
+  if(e.pointerType==='touch'||e.pointerType==='pen'){
+    // 터치: 드래그는 이동만, 더블탭해야 발사 (두 번째 탭을 누르고 있으면 연사)
+    const now=performance.now();
+    if(now-lastTap<350&&Math.abs(ptr.x-lastTapX)<70){ptr.down=true;ptr.tapShot=true;lastTap=0;}
+    else{lastTap=now;lastTapX=ptr.x;}
+  }else{ptr.down=true;}
+});
+cv.addEventListener('pointermove',e=>{ptr.x=px(e);ptr.active=true;});
+const up=()=>{ptr.down=false;};
+cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+
+/* ---------- 소리 ---------- */
+let AC=null;
+function ensureAudio(){try{if(!AC)AC=new (window.AudioContext||window.webkitAudioContext)();if(AC.state==='suspended')AC.resume();}catch(_){}}
+function tone(f,d,type,vol,slide,delay){
+  if(!$('optSfx').checked||!AC)return;
+  try{
+    const t=AC.currentTime+(delay||0),o=AC.createOscillator(),g=AC.createGain();
+    o.type=type||'square';o.frequency.setValueAtTime(f,t);
+    if(slide)o.frequency.exponentialRampToValueAtTime(Math.max(20,slide),t+d);
+    g.gain.setValueAtTime(vol||0.05,t);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    o.connect(g);g.connect(AC.destination);o.start(t);o.stop(t+d+0.02);
+  }catch(_){}
+}
+function sfx(k){
+  if(k==='shoot')tone(900,0.07,'square',0.025,380);
+  else if(k==='ok'){tone(660,0.12,'triangle',0.08,null,0);tone(880,0.12,'triangle',0.08,null,0.1);tone(1320,0.2,'triangle',0.08,null,0.2);}
+  else if(k==='bad'){tone(200,0.3,'sawtooth',0.09,70);}
+  else if(k==='hurt'){tone(300,0.15,'square',0.07,120);}
+  else if(k==='die'){tone(440,0.9,'sawtooth',0.1,40);}
+}
+
+/* ---------- 상태 ---------- */
+let S=null;
+let stars=[];
+for(let i=0;i<70;i++)stars.push({x:rnd(0,W),y:rnd(0,H),s:rnd(15,70),r:rnd(0.6,2)});
+const inGame=()=>S&&['play','between','dying'].includes(S.phase);
+function getBest(){try{return +localStorage.getItem('hanjaGalagaBest')||0;}catch(_){return 0;}}
+function setBest(v){try{localStorage.setItem('hanjaGalagaBest',String(v));}catch(_){}}
+
+function newGame(){
+  S={phase:'play',paused:false,t:0,energy:100,score:0,combo:0,level:1,solved:0,qn:0,
+     p:{x:W/2,y:H-62},bullets:[],ebullets:[],enemies:[],parts:[],q:null,wrong:[],
+     fireT:0,ft:2,shake:0,flash:0,hurt:0,bt:0,dt:0,msg:null,
+     diff:parseFloat($('diff').value)||1,efire:$('optEnemyFire').checked,speed:20};
+  deck=[];
+  nextQ();
+  $('pauseBtn').classList.remove('hidden');
+}
+
+function fitLabel(txt,maxW){
+  for(let fs=17;fs>=12;fs--){ctx.font='700 '+fs+'px '+FONT;if(ctx.measureText(txt).width<=maxW)return{lines:[txt],fs};}
+  let l1,l2;
+  const mid=Math.floor(txt.length/2);
+  let best=-1,bd=99;
+  for(let i=0;i<txt.length;i++)if(txt[i]===' '&&Math.abs(i-mid)<bd){bd=Math.abs(i-mid);best=i;}
+  if(best>0){l1=txt.slice(0,best);l2=txt.slice(best+1);}else{l1=txt.slice(0,mid);l2=txt.slice(mid);}
+  for(let fs=14;fs>=9;fs--){ctx.font='700 '+fs+'px '+FONT;if(Math.max(ctx.measureText(l1).width,ctx.measureText(l2).width)<=maxW)return{lines:[l1,l2],fs};}
+  return{lines:[l1,l2],fs:9};
+}
+
+function nextQ(){
+  if(!deck.length)deck=shuffle(ITEMS);
+  let it=deck.pop(),wr=wrongsFor(it),guard=0;
+  while(!wr&&guard++<50){it=deck.length?deck.pop():shuffle(ITEMS)[0];wr=wrongsFor(it);}
+  if(!wr)wr=['—','—','—'];
+  const opts=shuffle([it.a].concat(wr));
+  S.q={q:it.q,p:it.p,a:it.a};
+  S.qn++;
+  const ew=104,gap=8,x0=(W-(4*ew+3*gap))/2;
+  S.enemies=opts.map((o,i)=>{
+    const f=fitLabel(o,ew-10);
+    return{i,bx:x0+i*(ew+gap),x:x0+i*(ew+gap),y:56+rnd(0,34),w:ew,h:56,label:o,lines:f.lines,fs:f.fs,correct:o===it.a,alive:true,age:0,seed:rnd(0,6.28)};
+  });
+  S.speed=(16+S.level*3.5)*S.diff;
+  S.phase='play';
+}
+
+function say(text,color,life){S.msg={t:text,c:color,life:life||1.6,max:life||1.6};}
+function boom(x,y,c,n){for(let i=0;i<n;i++){const a=rnd(0,6.28),v=rnd(40,260);S.parts.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:rnd(0.4,0.9),max:0.9,c,r:rnd(1.5,3.5)});}}
+function addWrong(){
+  const key=S.q.q+'|'+S.q.p;
+  if(!S.wrong.some(w=>w.key===key))S.wrong.push({key,q:S.q.q,a:S.q.a,p:S.q.p});
+}
+
+function hit(e){
+  e.alive=false;
+  const cx=e.x+e.w/2,cy=e.y+e.h/2;
+  if(e.correct){
+    S.combo++;S.solved++;
+    S.score+=100+Math.min(S.combo-1,10)*10;
+    S.energy=Math.min(100,S.energy+4);
+    boom(cx,cy,'#7CFFB2',34);
+    S.enemies.forEach(o=>{if(o.alive){o.alive=false;boom(o.x+o.w/2,o.y+o.h/2,'#6b7aa8',10);}});
+    let m='정답! '+S.q.q+' = '+S.q.a;
+    if(S.solved%8===0){S.level++;m+='  ·  단계 UP!';}
+    say(m,'#7CFFB2',1.6);
+    sfx('ok');
+    S.phase='between';S.bt=1.0;
+  }else{
+    S.energy-=20;S.combo=0;S.shake=0.35;S.flash=0.35;
+    boom(cx,cy,'#ff6b6b',28);
+    addWrong();
+    say('오답! 에너지 −20','#ff8fa3',1.4);
+    sfx('bad');
+    if(S.energy<=0)die();
+  }
+}
+function escaped(e){
+  S.energy-=20;S.combo=0;S.shake=0.35;S.flash=0.35;
+  addWrong();
+  boom(e.x+e.w/2,DEAD,'#ff6b6b',24);
+  S.enemies.forEach(o=>{if(o.alive){o.alive=false;boom(o.x+o.w/2,o.y+o.h/2,'#6b7aa8',8);}});
+  say('놓쳤다! 정답은 "'+S.q.a+'" (−20)','#ffb703',1.9);
+  sfx('bad');
+  if(S.energy<=0){die();return;}
+  S.phase='between';S.bt=1.4;
+}
+function die(){
+  S.energy=0;S.phase='dying';S.dt=1.4;
+  boom(S.p.x,S.p.y,'#ffffff',60);boom(S.p.x,S.p.y,'#4cc9f0',40);
+  sfx('die');
+}
+function endGame(){
+  S.phase='over';
+  const best=Math.max(getBest(),S.score);setBest(best);
+  $('oScore').textContent=S.score;$('oSolved').textContent=S.solved;$('oLevel').textContent=S.level;$('oBest').textContent=best;
+  const box=$('wrongList');box.textContent='';
+  if(!S.wrong.length){const d=document.createElement('div');d.textContent='틀린 문제가 없어요! 👏';box.appendChild(d);}
+  S.wrong.slice(0,40).forEach(w=>{
+    const d=document.createElement('div');
+    d.appendChild(document.createTextNode(w.q+'  →  '));
+    const s=document.createElement('span');s.textContent=w.a;d.appendChild(s);
+    box.appendChild(d);
+  });
+  $('over').classList.remove('hidden');
+  $('pauseBtn').classList.add('hidden');
+}
+function togglePause(){
+  if(!S||!inGame())return;
+  S.paused=!S.paused;
+  $('pauseBtn').textContent=S.paused?'▶':'⏸';
+}
+
+/* ---------- 업데이트 ---------- */
+function update(dt){
+  S.t+=dt;
+  const p=S.p,alive=S.phase!=='dying';
+  if(alive){
+    const dir=((keys.ArrowRight||keys.KeyD)?1:0)-((keys.ArrowLeft||keys.KeyA)?1:0);
+    if(dir){p.x+=dir*360*dt;ptr.active=false;}
+    else if(ptr.active){p.x+=(ptr.x-p.x)*Math.min(1,dt*16);}
+    p.x=clamp(p.x,24,W-24);
+    S.fireT-=dt;
+    if((keys.Space||ptr.down||ptr.tapShot)&&S.fireT<=0){S.bullets.push({x:p.x,y:p.y-26});S.fireT=0.2;ptr.tapShot=false;sfx('shoot');}
+  }
+  // 플레이어 탄환
+  for(const b of S.bullets){
+    b.y-=620*dt;
+    if(b.y<PANEL_BOTTOM-4){b.dead=true;continue;}
+    for(const e of S.enemies){
+      if(!e.alive||e.y+e.h<PANEL_BOTTOM+6)continue;
+      if(b.x>e.x&&b.x<e.x+e.w&&b.y>e.y&&b.y<e.y+e.h){b.dead=true;hit(e);break;}
+    }
+    if(S.phase==='dying')break;
+  }
+  S.bullets=S.bullets.filter(b=>!b.dead);
+  // 적
+  if(S.phase==='play'){
+    for(const e of S.enemies){
+      if(!e.alive)continue;
+      e.age+=dt;e.y+=S.speed*dt;
+      e.x=e.bx+Math.sin(S.t*1.1+e.seed)*12;
+      if(e.y+e.h>=DEAD){
+        e.alive=false;
+        if(e.correct){escaped(e);break;}
+        boom(e.x+e.w/2,DEAD,'#6b7aa8',8);
+      }
+    }
+    // 적 탄환(선택)
+    if(S.efire&&S.phase==='play'){
+      S.ft-=dt;
+      if(S.ft<=0){
+        const vis=S.enemies.filter(e=>e.alive&&e.y>PANEL_BOTTOM);
+        if(vis.length){const e=vis[Math.floor(Math.random()*vis.length)];S.ebullets.push({x:e.x+e.w/2,y:e.y+e.h,vy:170+S.level*12});}
+        S.ft=rnd(1.2,2.4)/(1+S.level*0.1);
+      }
+    }
+  }
+  for(const b of S.ebullets){
+    b.y+=b.vy*dt;
+    if(b.y>H+10){b.dead=true;continue;}
+    if(alive&&Math.abs(b.x-p.x)<16&&Math.abs(b.y-p.y)<20){
+      b.dead=true;S.energy-=10;S.hurt=0.3;S.shake=0.25;sfx('hurt');boom(p.x,p.y,'#ff8fa3',14);
+      say('피격! 에너지 −10','#ff8fa3',1.0);
+      if(S.energy<=0){die();break;}
+    }
+  }
+  S.ebullets=S.ebullets.filter(b=>!b.dead);
+  // 파티클/메시지
+  for(const q of S.parts){q.x+=q.vx*dt;q.y+=q.vy*dt;q.vx*=0.97;q.vy*=0.97;q.life-=dt;}
+  S.parts=S.parts.filter(q=>q.life>0);
+  if(S.msg){S.msg.life-=dt;if(S.msg.life<=0)S.msg=null;}
+  S.shake=Math.max(0,S.shake-dt);S.flash=Math.max(0,S.flash-dt);S.hurt=Math.max(0,S.hurt-dt);
+  // 단계 전환
+  if(S.phase==='between'){S.bt-=dt;if(S.bt<=0)nextQ();}
+  if(S.phase==='dying'){S.dt-=dt;if(S.dt<=0)endGame();}
+}
+
+/* ---------- 그리기 ---------- */
+function rr(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+function fitText(txt,maxW,start,min,weight){
+  for(let fs=start;fs>=min;fs--){ctx.font=(weight||'700')+' '+fs+'px '+FONT;if(ctx.measureText(txt).width<=maxW)return fs;}
+  return min;
+}
+function glow(x,y,r,color,alpha=0.25){
+  const g=ctx.createRadialGradient(x,y,0,x,y,r);
+  const m=/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(color);
+  const c0=m?parseInt(m[1],16)+','+parseInt(m[2],16)+','+parseInt(m[3],16):'255,255,255';
+  g.addColorStop(0,'rgba('+c0+',1)');g.addColorStop(1,'rgba('+c0+',0)'); // 같은 색으로 투명화 → 어두운 테두리 방지
+  ctx.save();ctx.globalAlpha=alpha;ctx.fillStyle=g;ctx.fillRect(x-r,y-r,r*2,r*2);ctx.restore();
+}
+function drawBG(dt){
+  const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,'#04061a');g.addColorStop(1,'#0b1240');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#fff';
+  for(const s of stars){
+    s.y+=s.s*dt;if(s.y>H){s.y=-2;s.x=rnd(0,W);}
+    ctx.globalAlpha=0.25+s.r/3;
+     ctx.fillStyle=s.r>1.45?'#c8eaff':'#ffffff';
+     ctx.beginPath();ctx.arc(s.x,s.y,s.r*0.65,0,Math.PI*2);ctx.fill();
+     if(s.r>1.65){ctx.globalAlpha=0.22;ctx.fillRect(s.x-3,s.y,6,0.6);ctx.fillRect(s.x,s.y-3,0.6,6);}
+  }
+  ctx.globalAlpha=1;
+}
+function drawEnemy(e){
+   const a=Math.min(1,e.age/0.4),c=COLS[e.i%4],cx=e.x+e.w/2;
+   ctx.save();ctx.globalAlpha=a;
+   glow(cx,e.y+27,70,c,0.16);
+   // 안테나 및 둥근 유리 조종석
+   ctx.strokeStyle=c;ctx.lineWidth=2.4;ctx.lineCap='round';
+   ctx.beginPath();ctx.moveTo(cx-15,e.y+10);ctx.lineTo(cx-21,e.y-4);
+   ctx.moveTo(cx+15,e.y+10);ctx.lineTo(cx+21,e.y-4);ctx.stroke();
+   for(const dx of [-21,21]){ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(cx+dx,e.y-4,2.8,0,Math.PI*2);ctx.fill();}
+   const dome=ctx.createLinearGradient(0,e.y-3,0,e.y+24);
+   dome.addColorStop(0,'#e9faff');dome.addColorStop(0.35,c);dome.addColorStop(1,'#142453');
+   ctx.fillStyle=dome;ctx.beginPath();ctx.ellipse(cx,e.y+12,25,14,0,Math.PI,2*Math.PI);ctx.fill();
+   ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(cx-8,e.y+5,3.1,0,7);ctx.arc(cx+8,e.y+5,3.1,0,7);ctx.fill();
+   ctx.fillStyle='#0b1030';ctx.beginPath();ctx.arc(cx-8,e.y+5,1.5,0,7);ctx.arc(cx+8,e.y+5,1.5,0,7);ctx.fill();
+   // 답안 패널: 선명한 외곽선과 부드러운 그라데이션
+   const panel=ctx.createLinearGradient(0,e.y+11,0,e.y+e.h);
+   panel.addColorStop(0,'#26386f');panel.addColorStop(0.5,'#14224d');panel.addColorStop(1,'#0b1437');
+   rr(e.x,e.y+11,e.w,e.h-11,10);ctx.fillStyle=panel;ctx.fill();
+   ctx.lineWidth=2.6;ctx.strokeStyle=c;ctx.stroke();
+   ctx.lineWidth=0.8;ctx.strokeStyle='rgba(255,255,255,.25)';
+   rr(e.x+3,e.y+14,e.w-6,e.h-17,8);ctx.stroke();
+   ctx.fillStyle='#ffffff';ctx.textAlign='center';ctx.textBaseline='middle';
+   ctx.font='800 '+e.fs+'px '+FONT;
+   const midY=e.y+11+(e.h-11)/2;
+   if(e.lines.length===1)ctx.fillText(e.lines[0],cx,midY+1);
+   else{ctx.fillText(e.lines[0],cx,midY-e.fs*0.6);ctx.fillText(e.lines[1],cx,midY+e.fs*0.6+1);}
+   ctx.restore();
+}
+
+function drawPlayer(){
+   if(S.phase==='dying')return;
+   const p=S.p;ctx.save();ctx.translate(p.x,p.y);
+   if(S.hurt>0&&Math.floor(S.t*30)%2)ctx.globalAlpha=0.4;
+   glow(0,4,53,'#32cfff',0.30);
+   // 다층 엔진 분사광
+   const flame=ctx.createLinearGradient(0,16,0,41);
+   flame.addColorStop(0,'#ffffff');flame.addColorStop(0.4,'#66f4ff');flame.addColorStop(0.8,'#ffbc4d');flame.addColorStop(1,'rgba(255,140,25,0)');
+   ctx.fillStyle=flame;ctx.beginPath();ctx.moveTo(-8,16);ctx.lineTo(0,31+Math.sin(S.t*24)*5);ctx.lineTo(8,16);ctx.fill();
+   // 날개 아래쪽 그림자
+   ctx.fillStyle='#183b79';ctx.beginPath();ctx.moveTo(0,-23);ctx.lineTo(9,-3);ctx.lineTo(25,11);ctx.lineTo(25,21);ctx.lineTo(8,16);ctx.lineTo(0,21);ctx.lineTo(-8,16);ctx.lineTo(-25,21);ctx.lineTo(-25,11);ctx.lineTo(-9,-3);ctx.closePath();ctx.fill();
+   const hull=ctx.createLinearGradient(-23,-22,24,20);
+   hull.addColorStop(0,'#ffffff');hull.addColorStop(0.4,'#a5eaff');hull.addColorStop(1,'#3b7ad3');
+   ctx.fillStyle=hull;ctx.beginPath();ctx.moveTo(0,-29);ctx.lineTo(9,-6);ctx.lineTo(25,12);ctx.lineTo(22,17);ctx.lineTo(8,11);ctx.lineTo(0,19);ctx.lineTo(-8,11);ctx.lineTo(-22,17);ctx.lineTo(-25,12);ctx.lineTo(-9,-6);ctx.closePath();ctx.fill();
+   ctx.strokeStyle='#e4fbff';ctx.lineWidth=1.3;ctx.stroke();
+   ctx.fillStyle='#ff577a';ctx.fillRect(-23,12,6,6);ctx.fillRect(17,12,6,6);
+   glow(0,-4,14,'#80faff',0.5);
+   ctx.fillStyle='#123768';ctx.beginPath();ctx.ellipse(0,-5,6,9,0,0,Math.PI*2);ctx.fill();
+   ctx.fillStyle='#79efff';ctx.beginPath();ctx.ellipse(-1,-7,3,5,0,0,Math.PI*2);ctx.fill();
+   ctx.restore();
+}
+
+function drawHUD(){
+  // 상단 정보
+  ctx.textBaseline='middle';ctx.font='700 14px '+FONT;
+  ctx.textAlign='left';ctx.fillStyle='#ffd166';ctx.fillText('점수 '+S.score,10,15);
+  ctx.textAlign='center';ctx.fillStyle='#9fe3ff';ctx.fillText('단계 '+S.level+' · 문제 '+S.qn,W/2,15);
+  ctx.textAlign='right';ctx.fillStyle=S.combo>1?'#7CFFB2':'#6b7aa8';ctx.fillText('콤보 ×'+S.combo,W-38,15);
+  // 문제 패널
+  rr(10,28,W-20,PANEL_BOTTOM-28-2,12);ctx.fillStyle='rgba(12,22,70,.96)';ctx.fill();ctx.lineWidth=2;ctx.strokeStyle='#3a5bd9';ctx.stroke();
+  ctx.textAlign='center';ctx.fillStyle='#9fb0d8';ctx.font='600 13px '+FONT;ctx.fillText(S.q.p,W/2,46);
+  const fs=fitText(S.q.q,W-60,46,16,'700');ctx.font='800 '+fs+'px '+FONT;ctx.fillStyle='#fff';ctx.fillText(S.q.q,W/2,80);
+  // 방어선
+  ctx.setLineDash([8,8]);ctx.strokeStyle='rgba(255,90,110,.55)';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,DEAD);ctx.lineTo(W,DEAD);ctx.stroke();ctx.setLineDash([]);
+  // 에너지
+  const ex=96,ew=W-ex-16,ey=H-26,eh=14,pct=clamp(S.energy/100,0,1);
+  ctx.textAlign='left';ctx.font='800 13px '+FONT;ctx.fillStyle='#cfe0ff';ctx.fillText('ENERGY',12,ey+eh/2+1);
+  rr(ex,ey,ew,eh,7);ctx.fillStyle='#141d4d';ctx.fill();
+  const col=pct>0.5?'#2ee59d':pct>0.25?'#ffd166':'#ff4d6d';
+  if(pct>0){rr(ex,ey,Math.max(10,ew*pct),eh,7);ctx.fillStyle=(pct<=0.25&&Math.floor(S.t*6)%2)?'#ff9aa8':col;ctx.fill();}
+  rr(ex,ey,ew,eh,7);ctx.lineWidth=1.5;ctx.strokeStyle='#5470d8';ctx.stroke();
+  ctx.textAlign='center';ctx.font='700 11px '+FONT;ctx.fillStyle='#fff';ctx.fillText(Math.max(0,Math.round(S.energy)),ex+ew/2,ey+eh/2+1);
+  // 메시지
+  if(S.msg){
+    ctx.globalAlpha=clamp(S.msg.life/0.4,0,1);
+    const f=fitText(S.msg.t,W-30,20,12,'800');ctx.font='800 '+f+'px '+FONT;ctx.textAlign='center';
+    ctx.lineWidth=4;ctx.strokeStyle='rgba(0,0,20,.85)';ctx.strokeText(S.msg.t,W/2,PANEL_BOTTOM+20);
+    ctx.fillStyle=S.msg.c;ctx.fillText(S.msg.t,W/2,PANEL_BOTTOM+20);
+    ctx.globalAlpha=1;
+  }
+}
+function draw(dt){
+  drawBG(dt);
+  if(!S)return;
+  ctx.save();
+  if(S.shake>0)ctx.translate(rnd(-5,5)*S.shake*3,rnd(-5,5)*S.shake*3);
+  for(const e of S.enemies)if(e.alive)drawEnemy(e);
+  // 탄환
+  for(const b of S.bullets){glow(b.x,b.y,17,'#42ddff',0.48);const g=ctx.createLinearGradient(0,b.y-8,0,b.y+8);g.addColorStop(0,'#fff');g.addColorStop(1,'#4cc9f0');ctx.fillStyle=g;rr(b.x-2.5,b.y-9,5,18,2);ctx.fill();}
+  for(const b of S.ebullets){glow(b.x,b.y,15,'#ff5478',0.45);ctx.fillStyle='#ff8fa3';ctx.beginPath();ctx.arc(b.x,b.y,5,0,7);ctx.fill();ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(b.x,b.y,2,0,7);ctx.fill();}
+  drawPlayer();
+  for(const q of S.parts){ctx.globalAlpha=clamp(q.life/q.max,0,1);ctx.fillStyle=q.c;ctx.beginPath();ctx.arc(q.x,q.y,q.r,0,7);ctx.fill();}
+  ctx.globalAlpha=1;
+  drawHUD();
+  ctx.restore();
+  if(S.flash>0){ctx.fillStyle='rgba(255,40,70,'+(S.flash*0.9)+')';ctx.fillRect(0,0,W,H);}
+  if(S.paused){
+    ctx.fillStyle='rgba(5,7,26,.75)';ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.font='800 36px '+FONT;ctx.fillText('일시정지',W/2,H/2-10);
+    ctx.font='600 15px '+FONT;ctx.fillStyle='#9fb0d8';ctx.fillText('P / Esc 또는 ▶ 버튼으로 계속',W/2,H/2+30);
+  }
+}
+
+let last=performance.now();
+function frame(now){
+  const dt=Math.min(0.05,(now-last)/1000);last=now;
+  if(S&&!S.paused&&S.phase!=='over')update(dt);
+  draw(S&&S.paused?0:dt);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* ---------- 메뉴 ---------- */
+document.querySelectorAll('input[name=mode]').forEach(r=>r.addEventListener('change',()=>{
+  const v=document.querySelector('input[name=mode]:checked').value;
+  $('customBox').classList.toggle('hidden',v!=='custom');
+  $('menuErr').textContent='';
+}));
+$('pauseBtn').addEventListener('click',e=>{e.stopPropagation();togglePause();});
+$('pauseBtn').addEventListener('pointerdown',e=>e.stopPropagation());
+function start(){
+  ensureAudio();
+  const mode=document.querySelector('input[name=mode]:checked').value;
+  ITEMS=buildItems(mode);
+  if(!ITEMS.length){$('menuErr').textContent='문제가 없어요. 한 줄에 "문제|정답|오답1|오답2|오답3" 형식으로 입력해 주세요.';return;}
+  if(mode==='custom'){
+    for(const it of ITEMS){
+      if(!wrongsFor(it)){$('menuErr').textContent='"'+it.q+'" 문제의 보기가 부족해요. 오답을 더 적거나 문제를 4개 이상(정답이 서로 다르게) 입력해 주세요.';return;}
+    }
+  }
+  $('menuErr').textContent='';
+  $('menu').classList.add('hidden');$('over').classList.add('hidden');
+  newGame();
+}
+$('startBtn').addEventListener('click',start);
+$('againBtn').addEventListener('click',()=>{$('over').classList.add('hidden');ITEMS=ITEMS.length?ITEMS:buildItems('hanja');newGame();});
+$('menuBtn').addEventListener('click',()=>{$('over').classList.add('hidden');$('menu').classList.remove('hidden');S=null;$('pauseBtn').classList.add('hidden');});
+})();
+</script>
+</body>
+</html>
